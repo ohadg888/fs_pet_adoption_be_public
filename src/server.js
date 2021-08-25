@@ -18,7 +18,7 @@ app.use(
 );
 app.use(express.json());
 app.use(cors());
-app.use("/assets/petPics", express.static("assets/petPics"));
+app.use(express.static("assets/petPics"));
 dotenv.config();
 
 petRoutes(app);
@@ -45,7 +45,6 @@ app.post("/api/login", async (req, res) => {
           res.status(200).json({
             message: "SUCCESS: user logged-in",
             accessToken: accessToken,
-            userID: userInfo._id.toString(),
             loggedIn: true,
           });
         } else {

@@ -5,46 +5,35 @@ import authUser from "../lib/middlewares/authUser";
 import authAdmin from "../lib/middlewares/authAdmin";
 
 const userRoutes = (app) => {
-  app
-    .route("/api/user/:id")
-    .get(async (req, res) => {
-      const userID = req.params.id;
+  app.get("/api/user/info", authUser, async (req, res) => {
+    delete req.user.hashedPassword;
+    res
+      .status(200)
+      .json({ message: "SUCCESS: got user by id", result: req.user });
+  });
+
+  app.put("/api/user/:id", authUser, async (req, res) => {
+    const { dataToUpdate } = req.body;
+    try {
       withDB(async (db) => {
-        const userInfo = await db
+        await db
           .collection("users")
-          .find({ _id: ObjectId(userID) })
-          .toArray();
-        delete userInfo[0].password;
-        res
-          .status(200)
-          .json({ message: "SUCCESS: got user by id", result: userInfo });
+          .updateOne({ _id: ObjectId(req.user._id) }, { $set: dataToUpdate });
+        res.status(201).json({
+          message: "SUCCESS: user was updated",
+        });
       }, res);
-    })
-    .put(authUser, async (req, res) => {
-      const { dataToUpdate } = req.body;
-      const userID = req.params.id;
-      console.log(req.body);
-      console.log(userID);
-      try {
-        withDB(async (db) => {
-          await db
-            .collection("users")
-            .updateOne({ _id: ObjectId(userID) }, { $set: dataToUpdate });
-          res.status(201).json({
-            message: "SUCCESS: user was updated",
-          });
-        }, res);
-      } catch (error) {
-        res.status(500).json({ message: "Error: iternal server error" });
-      }
-    });
+    } catch (error) {
+      res.status(500).json({ message: "Error: iternal server error" });
+    }
+  });
 
   app.get("/api/user", authUser, authAdmin, async (req, res) => {
     withDB(async (db) => {
-      const userInfo = await db.collection("users").find({}).toArray();
+      const users = await db.collection("users").find({}).toArray();
       res
         .status(200)
-        .json({ message: "SUCCESS: got all users", result: userInfo });
+        .json({ message: "SUCCESS: got all users", result: users });
     }, res);
   });
 
@@ -53,12 +42,11 @@ const userRoutes = (app) => {
     withDB(async (db) => {
       const userInfo = await db
         .collection("users")
-        .find({ _id: ObjectId(userID) })
-        .toArray();
-      delete userInfo[0].hashedPassword;
+        .findOne({ _id: ObjectId(userID) });
+      delete userInfo.hashedPassword;
       res
         .status(200)
-        .json({ message: "SUCCESS: got user by id", result: userInfo[0] });
+        .json({ message: "SUCCESS: got user by id", result: userInfo });
     }, res);
   });
 };

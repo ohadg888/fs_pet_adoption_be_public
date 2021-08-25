@@ -11,19 +11,23 @@ const storage = multer.diskStorage({
     callback(null, "./assets/petPics/");
   },
   filename: function (req, file, callback) {
-    console.log(file);
-    callback(null, uuidv4());
+    const fileType = file.mimetype.split("/")[1];
+    callback(null, uuidv4() + `.${fileType}`);
   },
 });
+
 const upload = multer({ storage: storage });
+
 const petRoutes = (app) => {
   app
     .route("/api/pet")
     .post(authUser, authAdmin, upload.single("petPic"), async (req, res) => {
       console.log(req.file);
       const petData = { ...req.body };
+      delete petData.petPic;
+      petData.picture = req.file.filename;
       petData.ownerID = null;
-      console.log(123);
+      console.log(req.file);
       try {
         console.log(petData);
         const isValid = await addPetSchema.isValid(petData);
@@ -86,26 +90,30 @@ const petRoutes = (app) => {
     });
 
   app.post("/api/pet/:id/adopt", authUser, async (req, res) => {
-    const { type, userID } = req.body;
+    const { type } = req.body;
     const petID = req.params.id;
     withDB(async (db) => {
       await db
         .collection("pets")
         .updateOne(
           { _id: ObjectId(petID) },
-          { $set: { statusField: type, ownerID: userID } }
+          { $set: { statusField: type, ownerID: req.user._id } }
         );
       await db
         .collection("users")
-        .updateOne({ _id: ObjectId(userID) }, { $push: { myPets: petID } });
+        .updateOne(
+          { _id: ObjectId(req.user._id) },
+          { $push: { myPets: petID } }
+        );
       res.status(200).json({ message: `SUCCESS: pet was ${type}` });
     }, res);
   });
 
   app.post("/api/pet/:id/return", authUser, async (req, res) => {
-    const { userID } = req.body;
     const petID = req.params.id;
     withDB(async (db) => {
+      ownerID = await db.collection("pets").findOne({ _id: ObjectId(petID) })
+        .ownerID;
       await db
         .collection("pets")
         .updateOne(
@@ -114,7 +122,7 @@ const petRoutes = (app) => {
         );
       await db
         .collection("users")
-        .updateOne({ _id: ObjectId(userID) }, { $pull: { myPets: petID } });
+        .updateOne({ _id: ObjectId(ownerID) }, { $pull: { myPets: petID } });
       res.status(200).json({ message: `SUCCESS: pet was returned` });
     }, res);
   });
@@ -122,38 +130,59 @@ const petRoutes = (app) => {
   app
     .route("/api/pet/:id/save")
     .post(authUser, async (req, res) => {
-      const { userID } = req.body;
       const petID = req.params.id;
       withDB(async (db) => {
         await db
           .collection("users")
           .updateOne(
-            { _id: ObjectId(userID) },
+            { _id: ObjectId(req.user._id) },
             { $push: { savedPets: petID } }
           );
-        res.status(200).json({ message: "SUCCESS: pet was saved" });
+        const user = await db
+          .collection("users")
+          .findOne({ _id: ObjectId(req.user._id) });
+        res
+          .status(200)
+          .json({ message: "SUCCESS: pet was saved", result: user });
       }, res);
     })
     .delete(authUser, async (req, res) => {
-      const { userID } = req.body;
       const petID = req.params.id;
       withDB(async (db) => {
         await db
           .collection("users")
           .updateOne(
-            { _id: ObjectId(userID) },
+            { _id: ObjectId(req.user._id) },
             { $pull: { savedPets: petID } }
           );
-        res.status(200).json({ message: "SUCCESS: pet was unsaved" });
+        const user = await db
+          .collection("users")
+          .findOne({ _id: ObjectId(req.user._id) });
+        res
+          .status(200)
+          .json({ message: "SUCCESS: pet was unsaved", result: user });
       }, res);
     });
 
   app.get("/api/pet/user/:id", async (req, res) => {
-    const { petData } = req.body;
-    const petID = req.params.id;
+    const userID = req.params.id;
     withDB(async (db) => {
-      const userInfo = await db.collection("users").insert(petData);
-      res.status(200).json({ message: "SUCCESS: pet was added" });
+      const userInfo = await db
+        .collection("users")
+        .findOne({ _id: ObjectId(userID) });
+      const myPets = await db
+        .collection("pets")
+        .find({ ownerID: userInfo._id.toString() })
+        .toArray();
+      userInfo.savedPets = userInfo.savedPets.map((id) => ObjectId(id));
+      const savedPets = await db
+        .collection("pets")
+        .find({ _id: { $in: userInfo.savedPets } })
+        .toArray();
+      res.status(200).json({
+        message: "SUCCESS: get pets by userID",
+        result: { myPets: myPets, savedPets: savedPets },
+      });
     }, res);
   });
 };

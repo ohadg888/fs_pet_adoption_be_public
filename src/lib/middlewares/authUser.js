@@ -11,7 +11,6 @@ function authUser(req, res, next) {
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, userID) => {
     if (err) return res.status(403).json({ message: "Error: not allowed" });
-    req.userID = userID;
     withDB(async (db) => {
       const userInfo = await db
         .collection("users")
