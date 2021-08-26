@@ -61,8 +61,7 @@ const petRoutes = (app) => {
       withDB(async (db) => {
         const pets = await db
           .collection("pets")
-          .findOne({ _id: ObjectId(petID) })
-          .toArray();
+          .findOne({ _id: ObjectId(petID) });
         res.status(200).json({ message: "SUCCESS", result: pets });
       }, res);
     })
@@ -97,32 +96,35 @@ const petRoutes = (app) => {
         .collection("pets")
         .updateOne(
           { _id: ObjectId(petID) },
-          { $set: { statusField: type, ownerID: req.user._id } }
+          { $set: { status: type, ownerID: req.user._id.toString() } }
         );
       await db
         .collection("users")
-        .updateOne(
-          { _id: ObjectId(req.user._id) },
-          { $push: { myPets: petID } }
-        );
+        .updateOne({ _id: req.user._id }, { $push: { myPets: petID } });
       res.status(200).json({ message: `SUCCESS: pet was ${type}` });
     }, res);
   });
 
   app.post("/api/pet/:id/return", authUser, async (req, res) => {
     const petID = req.params.id;
+    console.log(petID);
     withDB(async (db) => {
-      ownerID = await db.collection("pets").findOne({ _id: ObjectId(petID) })
-        .ownerID;
+      console.log(345);
+      const pet = await db.collection("pets").findOne({ _id: ObjectId(petID) });
+      console.log(123);
+      console.log(pet.ownerID);
       await db
         .collection("pets")
         .updateOne(
           { _id: ObjectId(petID) },
-          { $set: { statusField: "available" }, ownerID: null }
+          { $set: { status: "available", ownerID: null } }
         );
       await db
         .collection("users")
-        .updateOne({ _id: ObjectId(ownerID) }, { $pull: { myPets: petID } });
+        .updateOne(
+          { _id: ObjectId(pet.ownerID) },
+          { $pull: { myPets: petID } }
+        );
       res.status(200).json({ message: `SUCCESS: pet was returned` });
     }, res);
   });
@@ -134,13 +136,10 @@ const petRoutes = (app) => {
       withDB(async (db) => {
         await db
           .collection("users")
-          .updateOne(
-            { _id: ObjectId(req.user._id) },
-            { $push: { savedPets: petID } }
-          );
+          .updateOne({ _id: req.user._id }, { $push: { savedPets: petID } });
         const user = await db
           .collection("users")
-          .findOne({ _id: ObjectId(req.user._id) });
+          .findOne({ _id: req.user._id });
         res
           .status(200)
           .json({ message: "SUCCESS: pet was saved", result: user });
@@ -151,13 +150,10 @@ const petRoutes = (app) => {
       withDB(async (db) => {
         await db
           .collection("users")
-          .updateOne(
-            { _id: ObjectId(req.user._id) },
-            { $pull: { savedPets: petID } }
-          );
+          .updateOne({ _id: req.user._id }, { $pull: { savedPets: petID } });
         const user = await db
           .collection("users")
-          .findOne({ _id: ObjectId(req.user._id) });
+          .findOne({ _id: req.user._id });
         res
           .status(200)
           .json({ message: "SUCCESS: pet was unsaved", result: user });
